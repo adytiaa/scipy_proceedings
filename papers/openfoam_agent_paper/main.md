@@ -113,7 +113,7 @@ This test is the true benchmark for evaluating the agent's zero-shot physics rea
 ## The Self-Evolution Pipeline
 
 
-The basic limitation of using LLMs as physical agents is that they can fall victim to self-distillation collapse. Training a machine learning model on slightly erroneous data created by itself may quickly undermine its core functionality [@shumailov2024curse]. 
+The basic limitation of using LLMs as physical agents is that they can fall victim to self-distillation collapse. Training a machine learning model on slightly erroneous data created by itself may quickly undermine its core functionality [@shumailov2024curse].
 
 :::{figure} figures/fig_evolve.png
 :label: fig:evolve
