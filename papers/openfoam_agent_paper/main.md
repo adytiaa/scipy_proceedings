@@ -1,7 +1,7 @@
 ---
 title: 'AutoFOAM: The Self-Refining Autonomous OpenFOAM Agent'
 abstract: |
-  Computational Fluid Dynamics (CFD) plays an important role in modern engineering, but using open-source solvers such as OpenFOAM requires considerable knowledge and skills, as well as time-consuming configuration file setup. To reduce the burden for such a technical background, we propose **AutoFOAM** -- a self-evolving large language model (LLM) agent that creates, evaluates, runs, and evolves its own OpenFOAM simulations based solely on natural-language instructions. Our model is pre-trained on the Qwen-coder 2.5-14B, which is then fine-tuned on 252 text prompts targeting 7 OpenFOAM solvers, 13 parametrized mesh templates, and a $y^+$-aware numerical policy. The crucial element of the algorithm is a sophisticated evolution loop composed of 7 stages. To prevent model degeneration under repeated self-training, the agent employs three complementary anti-collapse streams: RAG-augmented retry context, surgical dictionary-level patching, and prompt-diversity paraphrasing. By bridging generative artificial intelligence with rigorous fluid simulations, **AutoFOAM** accelerates rapid prototyping and democratizes advanced CFD workflows.
+  Computational Fluid Dynamics (CFD) plays an important role in modern engineering, but using open-source solvers such as OpenFOAM requires considerable knowledge and skills, as well as time-consuming configuration file setup. To reduce the burden for such a technical background, we propose **AutoFOAM** -- a self-evolving large language model (LLM) agent that creates, evaluates, runs, and evolves its own OpenFOAM simulations based solely on natural-language instructions. Our model is pre-trained on the Qwen-coder 2.5-14B, which is then fine-tuned on 252 text prompts targeting 7 OpenFOAM solvers, 13 parametrized mesh templates, and a $y^+$-target-aware parameter extraction and case configuration. The crucial element of the algorithm is a sophisticated evolution loop composed of 7 stages. To prevent model degeneration under repeated self-training, the agent employs three complementary anti-collapse streams: RAG-augmented retry context, surgical dictionary-level patching, and prompt-diversity paraphrasing. By bridging generative artificial intelligence with rigorous fluid simulations, **AutoFOAM** accelerates rapid prototyping and democratizes advanced CFD workflows.
 ---
 
 ## Introduction
@@ -14,13 +14,13 @@ To surmount these challenges, we propose **AutoFOAM**, a completely autonomous a
 
 The key contribution here is the implementation of the *seven-layer evolution loop*, which enables safe scaling of the agent's competence levels with minimal human interaction. The loop seamlessly blends real-time log parsing and solver correction with the most cutting-edge reinforcement learning methods, such as DPO for trajectory retry pairs [@rafailov2023direct]. To ensure the stability of the learning process in the long run, we propose three anti-collapse mechanisms: retrieval-augmented generation, retry context, surgical patching of dictionary-level errors, and prompt diversity paraphrasing. We can identify significant gains in solver family matching, average reward scores, and first-pass success rates in simulations.
 
-The recent developments include the creation of FoamGPT [@yue2025foamgpt], the retrieval-based architecture in OpenFOAMGPT [@pandey2025openfoamgpt], and the multi-agent approach in Foam-Agent 2.0 [@yue2025foamagent2], among others. These examples showcase the growing momentum of using LLMs to automate computations in the physical sciences. The need for these autonomous computing models is evidenced by benchmark testing platforms. Most of the recent release of them uses proprietary models to make them more versatile. Because they uses most advance AI models available in the market they may able to new solver implementation but the present models can't do anything out the specified geometry or solvers used for training. But the present work is based on local AI so that the data don't leave the system where we use AutoFOAM. It can able to handle the OpenFOAM simulation on relatively light weight models because of the harness agent which which built over the model. In addition, present model we have self improving layer which will help the model to improve the results over-time which is not available on other agents.
+The recent developments include the creation of FoamGPT [@yue2025foamgpt], the retrieval-based architecture in OpenFOAMGPT [@pandey2025openfoamgpt], and the multi-agent approach in Foam-Agent 2.0 [@yue2025foamagent2], among others. These examples showcase the growing momentum of using LLMs to automate computations in the physical sciences. The need for these autonomous computing models is evidenced by benchmark testing platforms. Most of the recent release of them uses proprietary models to make them more versatile. Because they uses most advance AI models available in the market they may able to new solver implementation but the present models can't do anything out the specified geometry or solvers used for training. But the present work is based on local AI so that the data don't leave the system where we use AutoFOAM. It can able to handle the OpenFOAM simulation on relatively light weight models because of the harness agent which which built over the model. In addition, present model we have self improving layer which will help the model to improve the results over-time which is not available on other agents. 
 
 To sum up, the primary contributions in this work include:
 
 - **Autonomous CFD Agent Framework**: **AutoFOAM** framework, which is designed to automatically generate syntactically sound and physically consistent OpenFOAM dictionaries from natural language commands.
 - **The Seven-Step Evolution Loop**: This is our novel training framework, which uses self-correction, dataset curation, SFT, DPO with retry pairs, mixing anchors, active learning, and a regression gate to ensure continual monotonic performance improvement of our models.
-- **Anti-collapse Strategies for Physical Simulators**: These consist of RAG-based context augmentation, dictionary patching, and paraphrasing strategies used to prevent model collapse in physical simulators using self-play.
+- **Anti-collapse mechanisms for self-evolving CFD agents**: These consist of RAG-based context augmentation, dictionary patching, and paraphrasing strategies used to prevent model collapse in physical simulators using self-play.
 
 
 (sec:arch)=
@@ -104,7 +104,7 @@ As part of the live autonomous runtime process, the AutoFOAM pipeline consistent
 ### Out-of-Distribution (OOD) Benchmark
 
 To properly test AutoFOAM's generalization and avoid overfitting to the synthetic training distribution, an evaluation set of 110 prompts was created in isolation from the training data. These prompts were written using novel syntax and unique vocabulary that intentionally avoid the semantic patterns found in the training dataset.
-This test is the true benchmark for evaluating the agent's zero-shot physics reasoning and its deterministic solver-routing ability. Here, we did not include solver or geometry configurations that are unsupported by the present AutoFOAM implementation. Instead, the evaluation used prompts that were not included in the training dataset, with variations in linguistic formulation, geometric parameters, and operating conditions, while remaining within the supported solver families and geometry templates.
+This test is the true benchmark for evaluating the agent's generalization to previously unseen prompt formulations, geometric parameters, and operating conditions within the supported CFD domain. Here, we did not include solver or geometry configurations that are unsupported by the present AutoFOAM implementation. Instead, the evaluation used prompts that were not included in the training dataset, with variations in linguistic formulation, geometric parameters, and operating conditions, while remaining within the supported solver families and geometry templates.
 
 
 (sec:evolve)=
@@ -175,7 +175,7 @@ Mesh generated by AutoFOAM
 
 Absolute performance of the self-contained pipeline was evaluated using an entirely held-out dataset of 110 out-of-distribution (OOD) prompt examples, run in a 8-way sharded cluster of NVIDIA H100 GPUs. Evaluation is limited only to solver classes and geometries available within AutoFOAM but varied geometric parameters and operational conditions for OOD generalization. Simultaneously, we evaluated AutoFOAM's ability to automatically identify the right solver class from the user-defined physics scenarios under the assumption that users have zero experience with selecting the appropriate solver class. *Please be aware that the precision of AutoFOAM will decrease when asking it to do something that does not relate to the solver or the geometry the current agent understands*.
 As summarized in {numref}`tab:headline`, the fine-tuned agent managed to solve 100% of the test cases without any `FOAM FATAL` errors. When prompted with a solver that is not supported, the model is unable to generate valid results. Representative examples of such prompts are provided in {numref}`tab:headline`.
-
+ 
 
 
 
@@ -254,16 +254,16 @@ To address the physics-validation gap, we perform a quantitative benchmark of an
 :label: fig:ghia_validation
 :width: 100%
 
-Validation of AutoFOAM-generated `icoFoam` cavity case ($Re=100$, $20\times20$ uniform mesh, $t=20$ s) against Ghia et al. (1982). (left) $u/U$ along vertical centerline $x/L=0.5$ and (right) $v/U$ along horizontal centerline $y/L=0.5$.
+Validation of AutoFOAM-generated `icoFoam` cavity case ($Re=100$, $20\times20$ uniform mesh, $t=20$ s) against Ghia et al. (1982). (left) $u/U$ along vertical centerline $x/L=0.5$ and (right) $v/U$ along horizontal centerline $y/L=0.5$. 
 :::
 
-{numref}`fig:ghia_validation` compares centreline velocity profiles at $Re=100$. The horizontal-centreline $v/U$ profile (right) agrees well with the benchmark, reproducing the positive peak ($\approx 0.17$ at $x/L\approx0.22$) and negative peak ($\approx -0.24$ at $x/L\approx0.80$) and the zero-crossing at $x/L\approx0.55$. The vertical-centreline $u/U$ profile (left) reproduces the overall shape and wall values ($u/U=1$ at $y/L=1$, $0$ at $y/L=0$) but exhibits a systematic 15–25% deviation for $0.7<y/L<0.95$. This is consistent with the known resolution requirement for this benchmark (Ghia used $129\times129$).
+{numref}`fig:ghia_validation` compares centreline velocity profiles at $Re=100$. The horizontal-centreline $v/U$ profile (right) agrees well with the benchmark, reproducing the positive peak ($\approx 0.17$ at $x/L\approx0.22$) and negative peak ($\approx -0.24$ at $x/L\approx0.80$) and the zero-crossing at $x/L\approx0.55$. 
 
 (sec:limitations)=
 ## Scope and Limitations
 
 
-Even though the present version of AutoFOAM shows very strong zero-shot generalizability and stability in self-enhancement, there are some operation envelopes which are beyond the scope of this release. From the geometric point of view, the agent can only operate within the limits of 13 `gmsh` parameterized models. Processing of complex geometries provided by CAD software as raw formats (e.g., STEP/IGES) involving automatic topology fixings and generation of an unstructured tetrahedral mesh is not feasible in the present framework. Physically, the numerical policy at present is restricted to the traditional RANS model for turbulent and laminar flows.
+Even though the present version of AutoFOAM shows very strong zero-shot generalizability and stability in self-enhancement, there are some operation envelopes which are beyond the scope of this release. From the geometric point of view, the agent can only operate within the limits of 13 `gmsh` parameterized models. Processing of complex geometries provided by CAD software as raw formats (e.g., STEP/IGES) involving automatic topology fixings and generation of an unstructured tetrahedral mesh is not feasible in the present framework. For turbulent flows, the current numerical policy is restricted to the implemented RANS turbulence-model configurations, while laminar cases are treated without a turbulence model.
 
 **The Physics-Validation Gap.**
 
