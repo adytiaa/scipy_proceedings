@@ -14,7 +14,7 @@ To surmount these challenges, we propose **AutoFOAM**, a completely autonomous a
 
 The key contribution here is the implementation of the *seven-layer evolution loop*, which enables safe scaling of the agent's competence levels with minimal human interaction. The loop seamlessly blends real-time log parsing and solver correction with the most cutting-edge reinforcement learning methods, such as DPO for trajectory retry pairs [@rafailov2023direct]. To ensure the stability of the learning process in the long run, we propose three anti-collapse mechanisms: retrieval-augmented generation, retry context, surgical patching of dictionary-level errors, and prompt diversity paraphrasing. We can identify significant gains in solver family matching, average reward scores, and first-pass success rates in simulations.
 
-The recent developments include the creation of FoamGPT [@yue2025foamgpt], the retrieval-based architecture in OpenFOAMGPT [@pandey2025openfoamgpt], and the multi-agent approach in Foam-Agent 2.0 [@yue2025foamagent2], among others. These examples showcase the growing momentum of using LLMs to automate computations in the physical sciences. The need for these autonomous computing models is evidenced by benchmark testing platforms.
+The recent developments include the creation of FoamGPT [@yue2025foamgpt], the retrieval-based architecture in OpenFOAMGPT [@pandey2025openfoamgpt], and the multi-agent approach in Foam-Agent 2.0 [@yue2025foamagent2], among others. These examples showcase the growing momentum of using LLMs to automate computations in the physical sciences. The need for these autonomous computing models is evidenced by benchmark testing platforms. Most of the recent release of them uses proprietary models to make them more versatile. Because they uses most advance AI models available in the market they may able to new solver implementation but the present models can't do anything out the specified geometry or solvers used for training. But the present work is based on local AI so that the data don't leave the system where we use AutoFOAM. It can able to handle the OpenFOAM simulation on relatively light weight models because of the harness agent which which built over the model. In addition, present model we have self improving layer which will help the model to improve the results over-time which is not available on other agents. 
 
 To sum up, the primary contributions in this work include:
 
@@ -37,7 +37,7 @@ Eight-stage agent pipeline. The LLM-driven stages (orange) manage semantic inter
 :::
 
 **Constrained Parameter Extraction.**
-The semantic reasoning process relies on vLLM [@vllm], enabling high-throughput inference. In order to enforce a valid topology of the output structure and avoid structural hallucination, the parameter extraction module enforces `xgrammar` JSON schema constraints around generation [@xgrammar]. As such, the generated output must conform to an established `CFDParams` structure, comprising geometric classification, Reynolds number ($Re$), fluid properties, flow regime, solver settings, and turbulence modeling approach. Additionally, physical consistency is enforced using a post-generation regular-expression validation procedure; if the LLM generates a characteristic velocity that is fundamentally inconsistent with the mathematical definition of $Re = U \cdot L_\text{char} / \nu$, then the boundaries are automatically overridden to ensure consistency.
+The semantic reasoning process relies on vLLM [@vllm], enabling high-throughput inference. In order to enforce a valid topology of the output structure and avoid structural hallucination, the parameter extraction module enforces `xgrammar` JSON schema constraints around generation [@xgrammar]. As such, the generated output must conform to an established `CFDParams` structure, comprising geometric classification, Reynolds number ($Re$), fluid properties, flow regime, solver settings, and turbulence modeling approach. Additionally, physical consistency is enforced using a post-generation regular-expression validation procedure; if the LLM generates a characteristic velocity that is fundamentally inconsistent with the mathematical definition of $Re = U \cdot L_\text{char} / \nu$, then the boundaries are automatically overridden to ensure consistency. It can also recognize the specified $y^+$ value from the user prompt and generate an appropriate mesh accordingly. We did not implement any explicit $y^+$-aware mesh grading or generation, as achieving $y^+ = 1$ is challenging for most high-Reynolds-number flows.
 
 **Deterministic Solver Routing.**
 Decoupling the solver choice process from the LLM solves a problem that had plagued early autonomous agents: the inclusion of geometric keywords biases the model toward selecting an unsuitable numerical regime (i.e., mistakenly choosing `simpleFoam` to solve a transient vortex shedding problem). In its place is a deterministic algorithm that leverages the physics flags (i.e., transient, compressible, thermal, multiphase) and the Reynolds number input by the system to isolate one of seven approved OpenFOAM solvers.
@@ -99,14 +99,12 @@ The physical intuition and syntactic proficiency underlying the initial state of
 
 ### Dynamic Trajectory Capture and Preference Mining
 
-As part of the live autonomous runtime process, the AutoFOAM pipeline consistently collects data during execution. Each extremely successful run ($r \geq 0.65$) is added to a dynamic collection set of runs, creating an ever-growing dataset consisting of 210 de-duplicated topologies. At the same time, a full record of each failed or unsuccessful run, along with its particular failure type (continuity failures, inconsistent residuals) and the accompanying dictionary text, is kept.
-
-The failure ledger is the key factor in the functioning of Layer 4 of our self-evolution pipeline. This process automatically extracts preference pairs in which failures are contrasted with successful retries. Then, these preference pairs are leveraged by the Direct Preference Optimization (DPO) framework [@rafailov2023direct], and hence, AutoFOAM can learn the correct syntax and escape its previous hallucinations.
+As part of the live autonomous runtime process, the AutoFOAM pipeline consistently collects data during execution. Each extremely successful run ($r \geq 0.65$) is added to a dynamic collection set of runs, creating an ever-growing dataset consisting of 210 de-duplicated topologies. At the same time, a full record of each failed or unsuccessful run, along with its particular failure type (continuity failures, inconsistent residuals) and the accompanying dictionary text, is kept. The failure ledger is the key factor in the functioning of Layer 4 of our self-evolution pipeline. This process automatically extracts preference pairs in which failures are contrasted with successful retries. Then, these preference pairs are leveraged by the Direct Preference Optimization (DPO) framework [@rafailov2023direct], and hence, AutoFOAM can learn the correct syntax and escape its previous hallucinations.
 
 ### Out-of-Distribution (OOD) Benchmark
 
 To properly test AutoFOAM's generalization and avoid overfitting to the synthetic training distribution, an evaluation set of 110 prompts was created in isolation from the training data. These prompts were written using novel syntax and unique vocabulary that intentionally avoid the semantic patterns found in the training dataset.
-This test is the true benchmark for evaluating the agent's zero-shot physics reasoning and its deterministic solver-routing ability.
+This test is the true benchmark for evaluating the agent's zero-shot physics reasoning and its deterministic solver-routing ability. Here, we did not include solver or geometry configurations that are unsupported by the present AutoFOAM implementation. Instead, the evaluation used prompts that were not included in the training dataset, with variations in linguistic formulation, geometric parameters, and operating conditions, while remaining within the supported solver families and geometry templates.
 
 
 (sec:evolve)=
@@ -131,10 +129,10 @@ The transition from inference to self-evolving AutoFOAM was facilitated by devel
 The pipeline strictly regulates the flow of prompts into the model through the following protocols:
 
 Layer 1 -- Autonomous In-Run Correction.
-:   If the system encounters a numerical divergence (like $NaN$ residuals) or an extreme mass imbalance (continuity problems), then the agent increases the window size of context inputs by taking the final output of the OpenFOAM simulation run. This is achieved through the automated process of re-prompting.
+:   When a numerical issue is detected in the OpenFOAM simulation, such as $NaN$ residuals or a large mass imbalance, the complete simulation log is not directly provided to the agent, as the large volume of output can exceed the model's context capacity. Instead, relevant diagnostic information is automatically extracted from the simulation output and supplied to the agent as additional context. Based on these diagnostics, the agent re-prompts the model to identify and correct the potential issue. This process is repeated iteratively until the simulation runs successfully or the predefined iteration limit is reached.
 
 Layer 2 -- Execution-Gated Curation.
-:   The agent applies a filter to the live capture logs, accepting only those instances where the fidelity is high enough to generate a reward greater than or equal to $r \geq 0.65$.
+:   The agent evaluates the generated solution using the defined reward function. Solutions achieving a reward score of $r \geq 0.65$ are considered sufficiently reliable and are retained as reference examples for the RAG and self-improvement components. These high-quality examples can subsequently be retrieved as relevant references or incorporated into the agent's iterative improvement process.
 
 Layer 3 -- Supervised Fine-Tuning (SFT) and Evaluation Gate.
 :   The gathered data is then used for one epoch of fine-tuning using QLoRA. Right after this fine-tuning process, the proposed model undergoes an 8-way sharded OOD test relative to a performance baseline to guarantee macro-stability.
@@ -149,7 +147,7 @@ Layer 6 -- Targeted Active Learning.
 :   The agent analyzes the data from the evaluation at Layer 3 and selects the most under performing family of solvers. The agent then initiates a self-instruction to create new seeds for this domain, strengthening its own weakest link.
 
 Layer 7 -- Granular Regression Auditing.
-:   Prior to combining and deploying the weights of the newly trained adapter, a rigorous word-by-word test is done with respect to the baseline model that has been fixed. The purpose of this is to detect any structural difference or degradation in the adaptation process.
+:   Prior to combining and deploying the weights of the newly trained adapter, the adapted model undergoes a detailed regression test against the fixed baseline model. The same evaluation prompts and test cases are provided to both models, and their generated outputs are compared to identify changes in response quality, correctness, and structure. This comparison is used to detect regressions, undesirable behavioral changes, or degradation introduced during the adaptation process. The newly trained adapter is retained only if it satisfies the predefined evaluation criteria relative to the baseline.
 
 ### Surgical Recovery Protocols: Streams A and B
 
@@ -176,11 +174,12 @@ Mesh generated by AutoFOAM
 :::
 
 Absolute performance of the self-contained pipeline was evaluated using an entirely held-out dataset of 110 out-of-distribution (OOD) prompt examples, run in a 8-way sharded cluster of NVIDIA H100 GPUs. Evaluation is limited only to solver classes and geometries available within AutoFOAM but varied geometric parameters and operational conditions for OOD generalization. Simultaneously, we evaluated AutoFOAM's ability to automatically identify the right solver class from the user-defined physics scenarios under the assumption that users have zero experience with selecting the appropriate solver class. *Please be aware that the precision of AutoFOAM will decrease when asking it to do something that does not relate to the solver or the geometry the current agent understands*.
-As summarized in {numref}`tab:headline`, the fine-tuned agent managed to solve 100% of the test cases without any `FOAM FATAL` errors.
+As summarized in {numref}`tab:headline`, the fine-tuned agent managed to solve 100% of the test cases without any `FOAM FATAL` errors. When prompted with a solver that is not supported, the model is unable to generate valid results. Representative examples of such prompts are provided in {numref}`tab:headline`.
+ 
 
 
 
-The agent exhibited impressive physical reasoning skills, with a perfect matching rate of $96.4\%$ when using the deterministic solver routing. By examining manually the four unmatched cases ({numref}`tab:prompt_examples`), one finds that these discrepancies arose only in mathematically ambiguous boundary regimes, namely the unsteady flow around cylinders at low Reynolds numbers, where the choice of the solver is `icoFoam` rather than the obligatory `pimpleFoam`. On the grounds of computational physics, the switch to `icoFoam` is still quite justified.
+The agent exhibited impressive physical reasoning skills, with a good match of $96.4\%$ when using the deterministic solver routing. By examining manually the four unmatched cases ({numref}`tab:prompt_examples`), one finds that these discrepancies arose only in mathematically ambiguous boundary regimes, namely the unsteady flow around cylinders at low Reynolds numbers, where the choice of the solver is `icoFoam` rather than the obligatory `pimpleFoam`. On the grounds of computational physics, the switch to `icoFoam` is still quite justified. We have also provided few solvers examples not supported by the present agent in ({numref}`tab:prompt_examples`).
 ```{list-table} OOD Evaluation Metrics.
 :label: tab:headline
 :header-rows: 1
@@ -206,14 +205,14 @@ Velocity contours generated by AutoFOAM
 :::
 
 
-```{list-table} Representative OOD prompts illustrating the agent's semantic understanding and correct translation to physical solvers.
+```{list-table} Representative OOD and out-of-set prompts illustrating the agent's semantic understanding, solver selection, and current operational limitations.
 :label: tab:prompt_examples
 :header-rows: 1
 
 * - Benchmark Tag
   - Prompt
   - Predicted Solver
-  - Match
+  - Match / Status
 * - `cav_re150_water`
   - *"Cavity flow Re=150 in water, 0.4 m square"*
   - `simpleFoam`
@@ -238,7 +237,27 @@ Velocity contours generated by AutoFOAM
   - *"Transient cylinder Re=250 in water, D=0.1 m"*
   - `icoFoam`
   - ✗
+* - `outofset_step_turbine`
+  - *"Simulate turbulent flow through a complex STEP-imported turbine passage with automatic topology fixing and unstructured mesh generation."*
+  - Unsupported
+  - Unsupported
+* - `outofset_reacting_multiphase`
+  - *"Simulate reacting multiphase combustion with detailed chemical kinetics and species transport."*
+  - Unsupported
+  - Unsupported
 ```
+### Physical Validation against Benchmark : Lid-Driven Cavity ($Re=100$)
+
+To address the physics-validation gap, we perform a quantitative benchmark of an AutoFOAM-generated case against the classical lid-driven cavity data of Ghia et al. [@ghia1982].
+
+:::{figure} figures/cavity_Re100_improved_ghia.png
+:label: fig:ghia_validation
+:width: 100%
+
+Validation of AutoFOAM-generated `icoFoam` cavity case ($Re=100$, $20\times20$ uniform mesh, $t=20$ s) against Ghia et al. (1982). (left) $u/U$ along vertical centerline $x/L=0.5$ and (right) $v/U$ along horizontal centerline $y/L=0.5$. 
+:::
+
+{numref}`fig:ghia_validation` compares centreline velocity profiles at $Re=100$. The horizontal-centreline $v/U$ profile (right) agrees well with the benchmark, reproducing the positive peak ($\approx 0.17$ at $x/L\approx0.22$) and negative peak ($\approx -0.24$ at $x/L\approx0.80$) and the zero-crossing at $x/L\approx0.55$. The vertical-centreline $u/U$ profile (left) reproduces the overall shape and wall values ($u/U=1$ at $y/L=1$, $0$ at $y/L=0$) but exhibits a systematic 15–25% deviation for $0.7<y/L<0.95$. This is consistent with the known resolution requirement for this benchmark (Ghia used $129\times129$).
 
 (sec:limitations)=
 ## Scope and Limitations
@@ -247,7 +266,8 @@ Velocity contours generated by AutoFOAM
 Even though the present version of AutoFOAM shows very strong zero-shot generalizability and stability in self-enhancement, there are some operation envelopes which are beyond the scope of this release. From the geometric point of view, the agent can only operate within the limits of 13 `gmsh` parameterized models. Processing of complex geometries provided by CAD software as raw formats (e.g., STEP/IGES) involving automatic topology fixings and generation of an unstructured tetrahedral mesh is not feasible in the present framework. Physically, the numerical policy at present is restricted to the traditional RANS model for turbulent and laminar flows.
 
 **The Physics-Validation Gap.**
-The main limitation of the current system comes from within the multi-variate reward function. At present, the reward scheme is highly biased toward mathematics-based criteria such as residual decay and continuity. Nevertheless, a simulation may prove mathematically sound yet physically incorrect (for example, a mathematically sound solution with an incorrect drag coefficient because of an erroneously calculated reference velocity). This is because the current framework does not feature an explicitly defined cross-reference module that would compare the agent's output against known data or literature sources (such as lid-cavity centerlines from benchmark studies [@ghia1982]) and thereby reject any physics-based mistakes made by the agent. This potential "physics validation" gap could endanger the ability of the Layer 4 DPO loop to receive the negative preference feedback necessary for learning. The implementation of an externally defined `physics validator` is the main task for the next phase of the current research.
+
+The main limitation of the current system lies in the multi-variate reward function. At present, the reward is primarily based on numerical indicators such as residual decay, continuity error, boundary-condition validity, and mesh quality. These criteria assess whether the numerical solution is successfully computed, but they do not by themselves establish that the resulting flow field or engineering quantities are physically correct. For example, a simulation may achieve residual convergence and satisfy the continuity criterion while still producing an incorrect drag coefficient if the reference area or velocity used for its calculation is incorrectly specified. The current framework does not include an explicit physics-validation module that cross-checks predicted flow quantities against established benchmark data or literature results, such as the lid-driven cavity centerline profiles of Ghia et al. [@ghia1982]. Consequently, such physics-based errors may not be detected by the current reward function and may propagate into the Layer 4 DPO preference pairs. Incorporating an externally defined `physics validator` that compares selected physical quantities against trusted reference data is therefore an important direction for future development.
 
 (sec:conclusion)=
 ## Conclusion
